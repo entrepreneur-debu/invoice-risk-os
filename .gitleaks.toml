@@ -1,0 +1,15 @@
+# Secret scanning configuration (used in CI: gitleaks git --exit-code 1).
+# Default rules stay on. Only two exact, intentionally public values are allow-listed:
+# the development and test DATA_ENCRYPTION_KEY placeholders (base64 of
+# "dev-only-insecure-data-key-00000" and "test-only-encryption-key-0000000").
+# Production refuses the development placeholder at startup (app/core/config.py).
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Documented development/test encryption-key placeholders"
+regexTarget = "match"
+regexes = [
+  '''ZGV2LW9ubHktaW5zZWN1cmUtZGF0YS1rZXktMDAwMDA=''',
+  '''dGVzdC1vbmx5LWVuY3J5cHRpb24ta2V5LTAwMDAwMDA=''',
+]

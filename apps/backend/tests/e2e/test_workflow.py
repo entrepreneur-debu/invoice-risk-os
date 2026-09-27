@@ -14,6 +14,7 @@ from typing import Any
 import httpx2 as httpx
 import pytest
 
+from app.core.config import get_settings
 from app.demo.pdf import DemoLine, invoice_pdf
 from app.demo.seed import make_gstin
 
@@ -172,7 +173,10 @@ def test_full_invoice_control_workflow(stack_available: None) -> None:
     assert clean["status"] == diverted["status"] == "review_required"
     assert clean["vendor"]["id"] == vendor["id"]
     assert clean["fields"]["total"]["value"] == "5310.00"
-    assert clean["assessment"]["ai_status"] == "unavailable"  # mock AI: deterministic path only
+    # CI runs the stack with the mock provider (deterministic path only); a stack configured
+    # with a real Gemini key must produce validated AI assistance.
+    expected_ai = "succeeded" if get_settings().ai_provider.value == "gemini" else "unavailable"
+    assert clean["assessment"]["ai_status"] == expected_ai
     codes = {s["rule_code"] for s in diverted["assessment"]["signals"]}
     assert "bank_account_mismatch" in codes and diverted["assessment"]["risk_level"] == "high"
 

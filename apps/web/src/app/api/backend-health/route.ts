@@ -1,4 +1,5 @@
 import type { BackendStatusResponse } from "@/lib/backend-status";
+import { apiAuthHeaders } from "@/lib/api-auth";
 import { getApiInternalUrl } from "@/lib/server-env";
 
 const TIMEOUT_MS = 3000;
@@ -12,6 +13,7 @@ export async function GET(): Promise<Response> {
   let status: BackendStatusResponse["status"] = "unavailable";
   try {
     const upstream = await fetch(`${getApiInternalUrl()}/health`, {
+      headers: await apiAuthHeaders(),
       cache: "no-store",
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });

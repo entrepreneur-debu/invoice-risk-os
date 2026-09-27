@@ -1,6 +1,6 @@
 # 0005 - Frontend reaches the API through a same-origin server route
 
-- Status: Accepted
+- Status: Accepted (extended in V1: all browser API traffic uses the same-origin proxy)
 - Date: 2026-09-27
 
 ## Context
@@ -24,3 +24,13 @@ calls later.
 - How authenticated data requests flow (a backend-for-frontend proxy versus direct
   browser-to-API calls with CORS) is **deliberately left open** until authentication
   is designed in a later step.
+
+## V1 update (2026-09-27)
+
+The open question is resolved in favour of the proxy (backend-for-frontend) pattern:
+`apps/web/src/app/api/v1/[...path]/route.ts` forwards **all** browser API calls to the
+API with header allow-lists. The benefits:
+- the session cookie is first-party and HttpOnly
+- `SameSite=Lax` plus a CSRF token plus an Origin check suffice
+- the API can be private: network-internal and IAM-protected on Cloud Run, using
+  service identity tokens (`API_ID_TOKEN_AUDIENCE`)

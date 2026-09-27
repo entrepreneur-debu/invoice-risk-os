@@ -1,3 +1,4 @@
+import { apiAuthHeaders } from "@/lib/api-auth";
 import { getApiInternalUrl } from "@/lib/server-env";
 
 /**
@@ -53,6 +54,8 @@ async function forward(request: Request, context: RouteContext): Promise<Respons
   const hasBody = !["GET", "HEAD"].includes(request.method);
   let upstream: Response;
   try {
+    // Private Cloud Run API: service identity token (no-op locally).
+    for (const [name, value] of Object.entries(await apiAuthHeaders())) headers.set(name, value);
     upstream = await fetch(target, {
       method: request.method,
       headers,

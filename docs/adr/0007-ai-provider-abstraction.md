@@ -1,6 +1,6 @@
 # 0007 - AI provider abstraction
 
-- Status: Accepted
+- Status: Accepted (revised for V1: Gemini is the production provider; Anthropic removed)
 - Date: 2026-09-27
 
 ## Context
@@ -34,3 +34,16 @@ selects the implementation from `AI_PROVIDER`:
   is designed. Changing it now is cheap because nothing depends on it yet.
 - The Anthropic implementation must go behind this protocol, and AI inputs and outputs
   will need audit logging with redaction.
+
+## V1 update (2026-09-27)
+
+- The V1 specification requires **Gemini** and forbids Anthropic, so the `anthropic` option
+  was removed.
+- `AIProvider.generate_structured(request, schema)` replaced `generate`. Every call returns
+  Pydantic-validated output, with typed failures (`AITimeout`, `AIUnavailable`,
+  `AIInvalidOutput`, `AIEmptyResponse`).
+- `MockAIProvider` is scripted per task and raises `AIUnavailable` when nothing is scripted,
+  so development stacks without a key exercise the degradation path.
+- Gemini rejects some JSON-Schema bounds as too complex. The provider sends a relaxed
+  schema and validates against the full one ([ai.md](../ai.md)).
+- Default model: `gemini-3.8-flash`, verified live. `gemini-2.5-flash` was retired.
