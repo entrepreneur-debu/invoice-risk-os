@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (lint, types, unit tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0 # no floating v10 tag exists upstream
+        with:
+          version: "0.12.19"
+          enable-cache: true
+          cache-dependency-glob: apps/backend/uv.lock
+      - name: Install dependencies
+        run: uv sync --frozen --python 3.12
+      - name: Lint
+        run: uv run ruff check .
+      - name: Format check
+        run: uv run ruff format --check .
+      - name: Type check
+        run: uv run mypy
+      - name: Unit tests
+        run: uv run pytest -m "not integration"
+      - name: Runtime imports without dev dependencies
+        # Catches imports of dev-only packages (e.g. type stubs) from application code.
+        run: |
+          uv sync --frozen --no-dev
+          uv run --no-sync python -c "import app.main, app.cli, app.worker.tasks, app.ai, app.ai.gemini"
+
+  frontend:
+    name: Frontend (lint, types, tests, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Lint
+        run: npm run lint
+      - name: Format check
+        run: npm run format:check
+      - name: Type check
+        run: npm run typecheck
+      - name: Tests
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  stack:
+    name: Docker stack (build, integration tests, smoke test)
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Create environment file from template
+        run: cp .env.example .env
+      - name: Validate compose file
+        run: docker compose config --quiet
+      - name: Build and start stack
+        run: docker compose up --build --detach --wait --wait-timeout 300
+      - name: Smoke test
+        run: |
+          set -a && . ./.env && set +a
+          ./scripts/smoke-test.sh
+      - uses: astral-sh/setup-uv@v10.2.0 # no floating v10 tag exists upstream
+        with:
+          version: "0.12.19"
+          enable-cache: true
+          cache-dependency-glob: apps/backend/uv.lock
+      - name: Backend integration tests
+        working-directory: apps/backend
+        run: |
+          uv sync --frozen --python 3.12
+          uv run pytest -m integration
+      - name: Service logs
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Tear down
+        if: always()
+        run: docker compose down --volumes

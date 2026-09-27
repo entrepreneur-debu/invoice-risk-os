@@ -1,0 +1,69 @@
+[project]
+name = "invoice-risk-backend"
+version = "0.1.0"
+description = "Invoice Risk & Payment Control OS - API and background workers (modular monolith)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "alembic>=1.20.0",
+    "boto3>=1.43.103",
+    "celery>=5.6.3",
+    "fastapi>=0.141.1",
+    "google-genai>=2.25.0",
+    "psycopg[binary]>=3.3.6",
+    "pydantic-settings>=2.15.0",
+    "redis>=8.1.0",
+    "sqlalchemy>=2.1.1",
+    "uvicorn>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "boto3-stubs[s3]>=1.43.103",
+    "celery-types>=0.26.0",
+    "httpx2>=2.13.1",
+    "mypy>=2.3.1",
+    "pytest>=9.1.1",
+    "ruff>=0.16.9",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # bugbear
+    "UP",  # pyupgrade
+    "S",   # bandit (security)
+    "SIM", # simplify
+    "RUF", # ruff-specific
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["app", "migrations", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: requires running PostgreSQL, Redis and MinIO (see README)",
+]
+filterwarnings = [
+    "error",
+    # Upstream: Celery's Redis result backend still calls redis-py's deprecated setex().
+    # Remove once Celery switches to set(..., ex=...).
+    "ignore:Call to deprecated setex:DeprecationWarning",
+]
