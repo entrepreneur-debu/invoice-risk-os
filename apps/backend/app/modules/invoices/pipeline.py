@@ -17,7 +17,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, selectinload
 
@@ -266,11 +266,25 @@ def _extract(db: Session, deps: PipelineDeps, invoice: Invoice, org: Organizatio
 
 
 def analyze(db: Session, deps: PipelineDeps, invoice: Invoice) -> RiskAssessment:
-    """Deterministic risk analysis + optional AI explanation, then opens review."""
+    """Deterministic risk analysis, then optional AI explanation, then opens review.
+
+    Phase 1 (deterministic) runs under a per-organization advisory lock and is committed
+    before the lock is released. Two invoices processed concurrently (e.g. a duplicate
+    pair arriving together) are therefore analysed one after the other, and the second
+    always sees the first's committed vendor, number and totals. Phase 2 (AI explanation,
+    slow) runs outside the lock and never changes the deterministic result.
+    """
     system = SystemContext(invoice.organization_id, "risk-engine")
     org = db.get(Organization, invoice.organization_id)
     assert org is not None  # noqa: S101
     settings = organization_settings(org)
+    invoice_id = invoice.id
+
+    # --- Phase 1: deterministic, serialized per organization -------------------------
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+        {"key": f"risk-analysis:{invoice.organization_id}"},
+    )
     if invoice.status == InvoiceStatus.EXTRACTED:
         transition(db, invoice, InvoiceStatus.RISK_ANALYSIS, actor_type=ActorType.SYSTEM)
     identify_vendor(db, invoice)
@@ -279,11 +293,6 @@ def analyze(db: Session, deps: PipelineDeps, invoice: Invoice) -> RiskAssessment
 
     ctx = build_context(db, invoice)
     result = run_rules(ctx)
-    if settings.ai_assistance_enabled:
-        outcome = ai_assist.explain(deps.ai, ctx, result.signals)
-    else:
-        outcome = ai_assist.AssistOutcome(AIStatus.DISABLED, None, None)
-
     db.execute(
         update(RiskAssessment)
         .where(
@@ -292,34 +301,32 @@ def analyze(db: Session, deps: PipelineDeps, invoice: Invoice) -> RiskAssessment
         )
         .values(is_current=False)
     )
-    assessment = RiskAssessment(
-        id=uuid.uuid4(),
-        organization_id=invoice.organization_id,
-        invoice_id=invoice.id,
-        engine_version=ENGINE_VERSION,
-        risk_level=result.level,
-        score=result.score,
-        is_current=True,
-        context_snapshot={
-            "rules_evaluated": result.rules_evaluated,
-            "rules_failed": list(result.rules_failed),
-            "vendor_id": ctx.vendor.id if ctx.vendor else None,
-            "purchase_order_id": ctx.purchase_order.id if ctx.purchase_order else None,
-            "vendor_history_count": len(ctx.vendor.history) if ctx.vendor else 0,
-        },
-        ai_status=outcome.status,
-        ai_provider=deps.ai.name if outcome.status != AIStatus.DISABLED else None,
-        ai_model=deps.ai.model if outcome.status == AIStatus.SUCCEEDED else None,
-        ai_output=outcome.output,
-        ai_error_code=outcome.error_code,
+    assessment_id = uuid.uuid4()
+    db.add(
+        RiskAssessment(
+            id=assessment_id,
+            organization_id=invoice.organization_id,
+            invoice_id=invoice.id,
+            engine_version=ENGINE_VERSION,
+            risk_level=result.level,
+            score=result.score,
+            is_current=True,
+            context_snapshot={
+                "rules_evaluated": result.rules_evaluated,
+                "rules_failed": list(result.rules_failed),
+                "vendor_id": ctx.vendor.id if ctx.vendor else None,
+                "purchase_order_id": ctx.purchase_order.id if ctx.purchase_order else None,
+                "vendor_history_count": len(ctx.vendor.history) if ctx.vendor else 0,
+            },
+            ai_status=AIStatus.NOT_REQUESTED,
+        )
     )
-    db.add(assessment)
     db.flush()
     for draft in result.signals:
         db.add(
             RiskSignal(
                 organization_id=invoice.organization_id,
-                assessment_id=assessment.id,
+                assessment_id=assessment_id,
                 invoice_id=invoice.id,
                 rule_code=draft.rule_code,
                 category=draft.category,
@@ -330,11 +337,30 @@ def analyze(db: Session, deps: PipelineDeps, invoice: Invoice) -> RiskAssessment
                 evidence=[e.as_dict() for e in draft.evidence],
             )
         )
+    invoice.risk_level = result.level
+    invoice.risk_score = result.score
+    db.commit()  # releases the advisory lock
+
+    # --- Phase 2: AI explanation (advisory, outside the lock) ----------------------------
+    if settings.ai_assistance_enabled:
+        outcome = ai_assist.explain(deps.ai, ctx, result.signals)
+    else:
+        outcome = ai_assist.AssistOutcome(AIStatus.DISABLED, None, None)
+
+    reloaded = _load(db, invoice_id)
+    assessment = db.get(RiskAssessment, assessment_id)
+    assert reloaded is not None and assessment is not None  # noqa: S101
+    invoice = reloaded
+    assessment.ai_status = outcome.status
+    assessment.ai_provider = deps.ai.name if outcome.status != AIStatus.DISABLED else None
+    assessment.ai_model = deps.ai.model if outcome.status == AIStatus.SUCCEEDED else None
+    assessment.ai_output = outcome.output
+    assessment.ai_error_code = outcome.error_code
     for observation in (outcome.output or {}).get("observations", []):
         db.add(
             RiskSignal(
                 organization_id=invoice.organization_id,
-                assessment_id=assessment.id,
+                assessment_id=assessment_id,
                 invoice_id=invoice.id,
                 rule_code="ai_observation",
                 category="ai_observation",
@@ -352,8 +378,6 @@ def analyze(db: Session, deps: PipelineDeps, invoice: Invoice) -> RiskAssessment
             )
         )
 
-    invoice.risk_level = result.level
-    invoice.risk_score = result.score
     approvals = open_approval_cycle(db, invoice, settings, result.level)
     transition(
         db,
@@ -373,7 +397,7 @@ def analyze(db: Session, deps: PipelineDeps, invoice: Invoice) -> RiskAssessment
         "invoice",
         invoice.id,
         {
-            "assessment_id": assessment.id,
+            "assessment_id": assessment_id,
             "engine_version": ENGINE_VERSION,
             "risk_level": result.level.value,
             "score": result.score,

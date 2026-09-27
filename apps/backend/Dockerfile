@@ -26,7 +26,10 @@ COPY alembic.ini ./
 COPY migrations ./migrations
 COPY app ./app
 USER app
+ENV PORT=8000
 EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=5 \
-    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
-CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+    CMD ["python", "-m", "app.healthcheck"]
+# PORT is injected by Cloud Run. exec replaces the shell so uvicorn receives SIGTERM directly
+# and drains in-flight requests (graceful shutdown) before the platform's kill deadline.
+CMD ["sh", "-c", "exec uvicorn app.main:create_app --factory --host 0.0.0.0 --port ${PORT} --no-access-log --timeout-graceful-shutdown 20"]

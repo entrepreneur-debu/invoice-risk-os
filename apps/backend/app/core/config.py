@@ -128,7 +128,7 @@ class Settings(BaseSettings):
     # --- AI provider ---------------------------------------------------------------
     ai_provider: AIProviderName = AIProviderName.MOCK
     gemini_api_key: SecretStr | None = None
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.8-flash"
     ai_request_timeout_seconds: int = Field(default=60, gt=0)
 
     # --- Email ingestion -----------------------------------------------------------

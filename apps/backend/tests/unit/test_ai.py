@@ -130,3 +130,25 @@ def test_injection_indicators_are_detected_deterministically() -> None:
 
     assert any("ignore previous instructions" in f.lower() for f in found)
     assert find_injection_indicators("Invoice No: 42  Total: 100.00") == []
+
+
+def test_schema_sent_to_gemini_drops_unsupported_bounds_but_validation_keeps_them() -> None:
+    from pydantic import Field, ValidationError
+
+    from app.ai.gemini import gemini_response_schema
+
+    class Item(BaseModel):
+        name: str = Field(max_length=5)
+
+    class Container(BaseModel):
+        items: list[Item] = Field(max_length=2)
+
+    sent = gemini_response_schema(Container)
+    assert "maxItems" not in str(sent) and "maxLength" not in str(sent)
+    models = FakeModels(
+        SimpleNamespace(text='{"items": [{"name": "a"}, {"name": "b"}, {"name": "c"}]}')
+    )
+    with pytest.raises(AIInvalidOutput):
+        gemini(models).generate_structured(REQUEST, Container)
+    with pytest.raises(ValidationError):
+        Container.model_validate({"items": [{"name": "toolong"}]})

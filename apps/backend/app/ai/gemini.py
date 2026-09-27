@@ -1,11 +1,12 @@
 """Google Gemini implementation of `AIProvider` (Gemini Developer API via google-genai)."""
 
 import logging
+from typing import Any
 
 import httpx
 from google import genai
 from google.genai import errors, types
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from app.ai.provider import (
     AIEmptyResponse,
@@ -21,6 +22,23 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT_MS = 60_000
 DEFAULT_MAX_ATTEMPTS = 2
+
+# Gemini rejects some JSON-Schema bounds (e.g. `maxItems` on arrays of objects) as too
+# complex. They are removed from the schema *sent* to the model only; the response is
+# still validated against the full Pydantic model, so every bound is enforced.
+_UNSUPPORTED_BOUNDS = frozenset({"maxItems", "minItems", "maxLength", "minLength"})
+
+
+def gemini_response_schema(schema: type[BaseModel]) -> dict[str, Any]:
+    def strip(node: Any) -> Any:
+        if isinstance(node, dict):
+            return {k: strip(v) for k, v in node.items() if k not in _UNSUPPORTED_BOUNDS}
+        if isinstance(node, list):
+            return [strip(v) for v in node]
+        return node
+
+    stripped: dict[str, Any] = strip(schema.model_json_schema())
+    return stripped
 
 
 class GeminiProvider:
@@ -61,7 +79,7 @@ class GeminiProvider:
             max_output_tokens=request.max_output_tokens,
             temperature=0.0,
             response_mime_type="application/json",
-            response_schema=schema,
+            response_json_schema=gemini_response_schema(schema),
         )
         try:
             response = self._client.models.generate_content(

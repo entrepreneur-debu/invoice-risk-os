@@ -1,20 +1,20 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import type { ReactNode } from "react";
 
-import { AppShell } from "@/components/app-shell";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Invoice Risk & Payment Control OS",
-  description: "Every invoice gets checked before a business pays it.",
+  title: { default: "Invoice Risk & Payment Control OS", template: "%s · Invoice Risk OS" },
+  description: "Every invoice gets checked before your business pays it.",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+  // Dynamic rendering is required so every response carries a fresh CSP nonce.
+  await connection();
   return (
     <html lang="en-IN" className="h-full antialiased">
-      <body className="flex min-h-full flex-col">
-        <AppShell>{children}</AppShell>
-      </body>
+      <body className="min-h-full">{children}</body>
     </html>
   );
 }
