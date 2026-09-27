@@ -5,12 +5,19 @@ description = "Invoice Risk & Payment Control OS - API and background workers (m
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "alembic>=1.20.0",
+    "argon2-cffi>=25.1.0",
     "boto3>=1.43.103",
     "celery>=5.6.3",
+    "cryptography>=50.0.1",
+    "email-validator>=2.3.0",
     "fastapi>=0.141.1",
+    "google-cloud-storage>=3.15.0",
     "google-genai>=2.25.0",
+    "pillow>=12.3.0",
     "psycopg[binary]>=3.3.6",
     "pydantic-settings>=2.15.0",
+    "pypdf>=6.19.0",
+    "python-multipart>=0.0.32",
     "redis>=8.1.0",
     "sqlalchemy>=2.1.1",
     "uvicorn>=0.54.0",
@@ -46,14 +53,27 @@ select = [
     "RUF", # ruff-specific
 ]
 
+[tool.ruff.lint.pycodestyle]
+# The formatter targets 100; long user-facing message strings may run slightly over.
+max-line-length = 110
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection markers are designed to be used as defaults.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.File", "fastapi.Header"]
+
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S105", "S106"]
+"tests/**" = ["S101", "S104", "S105", "S106", "S608"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
 files = ["app", "migrations", "tests"]
+
+[[tool.mypy.overrides]]
+# google-cloud-storage ships without type information.
+module = ["google.cloud.*", "google.api_core.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

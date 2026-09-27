@@ -8,7 +8,7 @@ from celery.exceptions import TimeoutError as CeleryTimeoutError
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from app.worker.tasks import PING_TASK_NAME
+from app.infra.tasks import PING as PING_TASK_NAME
 
 router = APIRouter(prefix="/diagnostics", tags=["diagnostics"])
 

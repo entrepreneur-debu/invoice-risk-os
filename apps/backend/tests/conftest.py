@@ -12,16 +12,18 @@ from app.main import create_app
 # Unreachable, obviously-fake endpoints: unit tests must never touch real services.
 UNIT_SETTINGS: dict[str, Any] = {
     "app_env": "test",
-    "app_secret_key": "test-secret",
+    "auth_secret": "test-secret-for-unit-tests-only-0000",
+    "data_encryption_key": "dGVzdC1vbmx5LWVuY3J5cHRpb24ta2V5LTAwMDAwMDA=",
     "log_level": "WARNING",
     "cors_allowed_origins": ["http://localhost:3000"],
     "max_request_body_bytes": 1024,
+    "session_cookie_secure": False,
     "database_url": "postgresql+psycopg://test:test@127.0.0.1:1/test",
     "redis_url": "redis://127.0.0.1:1/0",
-    "s3_endpoint_url": "http://127.0.0.1:1",
-    "s3_access_key_id": "test",
-    "s3_secret_access_key": "test",
-    "s3_bucket": "test-bucket",
+    "object_storage_endpoint_url": "http://127.0.0.1:1",
+    "object_storage_access_key_id": "test",
+    "object_storage_secret_access_key": "test",
+    "object_storage_bucket": "test-bucket",
 }
 
 SettingsFactory = Callable[..., Settings]

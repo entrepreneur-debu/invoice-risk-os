@@ -29,6 +29,12 @@ def create_celery_app(settings: Settings) -> Celery:
         task_reject_on_worker_lost=True,
         worker_prefetch_multiplier=1,
         worker_hijack_root_logger=False,
+        # Explicit, bounded behaviour for long-running work.
+        task_time_limit=15 * 60,
+        task_soft_time_limit=12 * 60,
+        worker_max_tasks_per_child=500,
+        task_track_started=True,
+        broker_transport_options={"visibility_timeout": 3600},
         timezone="UTC",
         enable_utc=True,
     )

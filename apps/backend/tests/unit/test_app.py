@@ -15,7 +15,12 @@ def test_app_starts_and_stops_cleanly(make_settings: SettingsFactory) -> None:
 
 
 def test_api_docs_disabled_in_production(make_settings: SettingsFactory) -> None:
-    app = create_app(make_settings(app_env="production", app_secret_key=PRODUCTION_SECRET))
+    app = create_app(
+        make_settings(
+            app_env="production", auth_secret=PRODUCTION_SECRET, session_cookie_secure=True
+        ),
+        readiness_checks=passing_checks(),
+    )
 
     with TestClient(app) as client:
         assert client.get("/docs").status_code == 404

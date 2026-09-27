@@ -2,13 +2,26 @@
 
 from app.ai.factory import create_ai_provider
 from app.ai.mock import MockAIProvider
-from app.ai.provider import AIProvider, AIProviderError, AIRequest, AIResponse
+from app.ai.provider import (
+    AIDocument,
+    AIEmptyResponse,
+    AIInvalidOutput,
+    AIProvider,
+    AIProviderError,
+    AIRequest,
+    AITimeout,
+    AIUnavailable,
+)
 
 __all__ = [
+    "AIDocument",
+    "AIEmptyResponse",
+    "AIInvalidOutput",
     "AIProvider",
     "AIProviderError",
     "AIRequest",
-    "AIResponse",
+    "AITimeout",
+    "AIUnavailable",
     "MockAIProvider",
     "create_ai_provider",
 ]

@@ -1,35 +1,63 @@
 """Provider-neutral AI interface.
 
-Deliberately minimal: it will be extended (structured output, documents, usage
-accounting) when invoice analysis is designed in a later step.
+Application code depends on `AIProvider` only. Every call returns output validated
+against a Pydantic schema; free-form text is never used as application logic.
+AI output is advisory: it is stored and displayed as AI-generated, and never drives
+arithmetic, duplicate determination, authorization, approval or payment.
 """
 
-from dataclasses import dataclass
-from typing import Protocol
+from dataclasses import dataclass, field
+from typing import Protocol, TypeVar
+
+from pydantic import BaseModel
+
+T = TypeVar("T", bound=BaseModel)
+
+
+@dataclass(frozen=True)
+class AIDocument:
+    data: bytes
+    mime_type: str
 
 
 @dataclass(frozen=True)
 class AIRequest:
+    task: str  # e.g. "invoice_extraction", "risk_explanation" (for logs/metrics)
+    system_instruction: str
     prompt: str
-    system: str | None = None
-    max_output_tokens: int = 1024
-
-
-@dataclass(frozen=True)
-class AIResponse:
-    text: str
-    provider: str
-    model: str
-    input_tokens: int
-    output_tokens: int
+    documents: tuple[AIDocument, ...] = field(default_factory=tuple)
+    max_output_tokens: int = 4096
 
 
 class AIProviderError(Exception):
-    """Raised by providers for failures callers may handle (timeouts, refusals, quota)."""
+    """Base class. `code` is stored on the record so reviewers can see why AI failed."""
+
+    code = "ai_error"
+
+
+class AITimeout(AIProviderError):
+    code = "ai_timeout"
+
+
+class AIUnavailable(AIProviderError):
+    code = "ai_unavailable"
+
+
+class AIInvalidOutput(AIProviderError):
+    code = "ai_invalid_output"
+
+
+class AIEmptyResponse(AIProviderError):
+    code = "ai_empty_response"
 
 
 class AIProvider(Protocol):
     @property
     def name(self) -> str: ...
 
-    def generate(self, request: AIRequest) -> AIResponse: ...
+    @property
+    def model(self) -> str: ...
+
+    def generate_structured(self, request: AIRequest, schema: type[T]) -> T:
+        """Returns output validated against `schema` or raises an `AIProviderError`."""
+        ...
