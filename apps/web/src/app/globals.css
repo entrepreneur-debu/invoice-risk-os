@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f7f7f8;
+  --surface: #ffffff;
+  --foreground: #16181d;
+  --muted: #5b616e;
+  --border: #e3e5e9;
+  --accent: #1f4fd6;
+  --accent-foreground: #ffffff;
+  --danger: #b42318;
+  --warning: #b54708;
+  --success: #067647;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0e1014;
+    --surface: #16191f;
+    --foreground: #e7e9ee;
+    --muted: #9aa1ad;
+    --border: #2a2f38;
+    --accent: #6d8dff;
+    --accent-foreground: #0b0d12;
+    --danger: #f97066;
+    --warning: #fdb022;
+    --success: #47cd89;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    "Noto Sans",
+    sans-serif;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
